@@ -51,6 +51,32 @@ jobs:
       - name: Configurar Pages
         uses: actions/configure-pages@v5
 
+      - name: Validar a release (capas, promoções e scripts)
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys
+          erros = []
+          cfg = json.load(open('config/app-config.json', encoding='utf-8'))
+          catalogo = json.load(open(cfg['catalogoUrl'], encoding='utf-8'))
+          ids = {j['id'] for j in catalogo['jogos']}
+          for jogo in catalogo['jogos']:
+              capa = os.path.join(cfg['pastaCapas'], jogo['capa'])
+              if not os.path.isfile(capa):
+                  erros.append(f"capa nao encontrada: {capa} ({jogo['id']})")
+          for pid in cfg.get('blackFriday', {}).get('promocoes', {}):
+              if pid not in ids:
+                  erros.append(f"promocao para jogo que nao existe no catalogo: {pid}")
+          for src in re.findall(r'<script src="([^"]+)"', open('index.html', encoding='utf-8').read()):
+              if not os.path.isfile(src):
+                  erros.append(f"script citado no index.html nao existe: {src}")
+          for e in erros:
+              print(f"::error::{e}")
+          if erros:
+              print(f"Release bloqueada: {len(erros)} problema(s).")
+              sys.exit(1)
+          print(f"Release ok: {len(ids)} jogos, todas as capas em {cfg['pastaCapas']}.")
+          PY
+
       - name: Empacotar o site
         uses: actions/upload-pages-artifact@v3
         with:
